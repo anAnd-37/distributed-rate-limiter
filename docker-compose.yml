@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+
+  # ── REDIS ──────────────────────────────────────────────────────────────────
+  # The core dependency — stores all token bucket state
+  # alpine image = minimal size (~7MB vs ~100MB for full image)
+  redis:
+    image: redis:7-alpine
+    container_name: redis-rate-limiter
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --loglevel notice
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── PROMETHEUS ─────────────────────────────────────────────────────────────
+  # Scrapes metrics from Spring Boot's /actuator/prometheus endpoint
+  # Stores time-series data for Grafana to visualize
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-rate-limiter
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ── GRAFANA ────────────────────────────────────────────────────────────────
+  # Visualizes Prometheus metrics — rate limit allow/deny counts,
+  # Redis latency, request throughput
+  # Default login: admin / admin
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-rate-limiter
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:

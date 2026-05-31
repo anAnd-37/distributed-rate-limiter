@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Scrape our Spring Boot rate limiter app
+  # /actuator/prometheus is exposed by micrometer-registry-prometheus
+  - job_name: 'rate-limiter'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+    # host.docker.internal resolves to your Windows host machine from inside Docker
+    # This is the correct way to reach localhost:8080 from a Docker container on Windows

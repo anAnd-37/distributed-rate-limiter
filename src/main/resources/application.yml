@@ -1,0 +1,72 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: rate-limiter
+
+  # ===== REDIS CONFIG =====
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms        # connection timeout ? if Redis doesn't respond in 2s, fail fast
+      lettuce:
+        pool:
+          max-active: 10     # max concurrent Redis connections
+          max-idle: 5        # max idle connections kept in pool
+          min-idle: 2        # min idle connections always ready
+          max-wait: 1000ms   # max time to wait for a connection from pool
+
+  # ===== SECURITY =====
+  security:
+    user:
+      name: admin
+      password: admin123
+
+# ===== ACTUATOR + PROMETHEUS =====
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+
+# ===== CUSTOM APP CONFIG =====
+app:
+
+  # JWT signing secret ? in production this comes from a secrets manager (AWS Secrets Manager, Vault)
+  # Must be at least 256 bits (32 chars) for HS256 algorithm
+  jwt:
+    secret: "3cfa76ef14937c1c0ea519f8fc057a80fcd04a7a7b35341a20b64ad8f0e57a32"
+    expiration-ms: 3600000   # 1 hour in milliseconds
+
+  # Rate limiter global defaults
+  rate-limit:
+    # Fallback when Redis is unavailable ? ALLOW (fail-open) or DENY (fail-closed)
+    # ALLOW = preserve availability (right default for most APIs)
+    # DENY  = preserve safety (use for payment/security endpoints)
+    fallback: ALLOW
+
+    # Circuit breaker config for Redis calls
+    circuit-breaker:
+      failure-threshold: 5       # open circuit after 5 consecutive Redis failures
+      wait-duration-seconds: 30  # stay open for 30s before trying again
+
+# ===== LOGGING =====
+logging:
+  level:
+    com.anand.ratelimiter: DEBUG
+    org.springframework.data.redis: INFO
+  pattern:
+    console: "%d{HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
